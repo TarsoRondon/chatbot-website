@@ -175,24 +175,49 @@ export async function ensureDb(): Promise<void> {
 }
 
 export async function readDb(): Promise<Database> {
-  await ensureDb()
-  const raw = await fs.readFile(DB_PATH, "utf8")
-  const parsed = JSON.parse(raw || "{}") as Partial<Database>
-  const admin = parsed.admin
-  const fallbackAdmin = {
-    username: "admin",
-    passwordHash: hashPassword(process.env.ADMIN_PASSWORD || "admin123"),
-    createdAt: new Date().toISOString(),
-  }
-  return {
-    admin: admin?.passwordHash ? (admin as AdminUser) : fallbackAdmin,
-    sessions: Array.isArray(parsed.sessions) ? (parsed.sessions as Session[]) : [],
-    business: sanitizeBusiness(parsed.business),
-    services: sanitizeServices(parsed.services as Service[]),
-    barbers: sanitizeBarbers(parsed.barbers as Barber[]),
-    about: sanitizeAbout(parsed.about as AboutTag[]),
-    schedule: sanitizeSchedule(parsed.schedule as ScheduleSettings),
-    appointments: Array.isArray(parsed.appointments) ? (parsed.appointments as Appointment[]) : [],
+  try {
+    await ensureDb()
+    const raw = await fs.readFile(DB_PATH, "utf8")
+    const parsed = JSON.parse(raw || "{}") as Partial<Database>
+    const admin = parsed.admin
+    const fallbackAdmin = {
+      username: "admin",
+      passwordHash: hashPassword(process.env.ADMIN_PASSWORD || "admin123"),
+      createdAt: new Date().toISOString(),
+    }
+    return {
+      admin: admin?.passwordHash ? (admin as AdminUser) : fallbackAdmin,
+      sessions: Array.isArray(parsed.sessions) ? (parsed.sessions as Session[]) : [],
+      business: sanitizeBusiness(parsed.business),
+      services: sanitizeServices(parsed.services as Service[]),
+      barbers: sanitizeBarbers(parsed.barbers as Barber[]),
+      about: sanitizeAbout(parsed.about as AboutTag[]),
+      schedule: sanitizeSchedule(parsed.schedule as ScheduleSettings),
+      appointments: Array.isArray(parsed.appointments) ? (parsed.appointments as Appointment[]) : [],
+    }
+  } catch (error) {
+    console.error("readDb failed, rebuilding default database:", error)
+    const fallbackAdmin = {
+      username: "admin",
+      passwordHash: hashPassword(process.env.ADMIN_PASSWORD || "admin123"),
+      createdAt: new Date().toISOString(),
+    }
+    const db: Database = {
+      admin: fallbackAdmin,
+      sessions: [],
+      business: sanitizeBusiness(DEFAULT_BUSINESS),
+      services: sanitizeServices(DEFAULT_SERVICES),
+      barbers: sanitizeBarbers(DEFAULT_BARBERS),
+      about: sanitizeAbout(DEFAULT_ABOUT),
+      schedule: sanitizeSchedule(DEFAULT_SCHEDULE),
+      appointments: [],
+    }
+    try {
+      await writeDb(db)
+    } catch (writeError) {
+      console.error("writeDb failed, using in-memory defaults:", writeError)
+    }
+    return db
   }
 }
 

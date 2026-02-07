@@ -1,6 +1,8 @@
 import { isAdminAuthenticated } from "@/lib/auth"
 import { readDb, writeDb, sanitizeSchedule } from "@/lib/db"
 
+export const runtime = "nodejs"
+
 export async function GET() {
   if (!(await isAdminAuthenticated())) {
     return Response.json({ error: "unauthorized" }, { status: 401 })

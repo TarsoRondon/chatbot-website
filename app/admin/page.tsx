@@ -149,6 +149,24 @@ export default function AdminPage() {
     }
   }, [calendarView, selectedDate])
 
+  const timeSlots = React.useMemo(() => {
+    if (!schedule) return []
+    const openMin = timeToMinutes(schedule.openTime)
+    const closeMin = timeToMinutes(schedule.closeTime)
+    const step = schedule.slotMinutes
+    const slots: string[] = []
+    for (let t = openMin; t + step <= closeMin; t += step) {
+      const inBreak = schedule.breaks.some((b) => {
+        const start = timeToMinutes(b.start)
+        const end = timeToMinutes(b.end)
+        return t >= start && t < end
+      })
+      if (inBreak) continue
+      slots.push(minutesToTime(t))
+    }
+    return slots
+  }, [schedule])
+
   const showSavedFeedback = () => {
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
@@ -561,23 +579,6 @@ export default function AdminPage() {
         ? [noBarberColumn]
         : barbersList.filter((b) => b.id === calendarBarber)
 
-  const timeSlots = React.useMemo(() => {
-    if (!schedule) return []
-    const openMin = timeToMinutes(schedule.openTime)
-    const closeMin = timeToMinutes(schedule.closeTime)
-    const step = schedule.slotMinutes
-    const slots: string[] = []
-    for (let t = openMin; t + step <= closeMin; t += step) {
-      const inBreak = schedule.breaks.some((b) => {
-        const start = timeToMinutes(b.start)
-        const end = timeToMinutes(b.end)
-        return t >= start && t < end
-      })
-      if (inBreak) continue
-      slots.push(minutesToTime(t))
-    }
-    return slots
-  }, [schedule])
 
   const selectedDateObj = selectedDate ? new Date(selectedDate + "T12:00:00") : new Date()
   const weekday = selectedDateObj.getDay()
