@@ -3,10 +3,9 @@ import type { Metadata, Viewport } from 'next'
 import { Inter, Playfair_Display } from 'next/font/google'
 
 import './globals.css'
-import { InstallPWAButton } from "@/components/InstallPWAButton"
 import { UpdateAvailableToast } from "@/components/UpdateAvailableToast"
 import { NetworkStatusToast } from "@/components/NetworkStatusToast"
-import { IosInstallHint } from "@/components/IosInstallHint"
+import ClientOverlays from "@/components/ClientOverlays"
 
 const _inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 const _playfair = Playfair_Display({ subsets: ['latin'], variable: '--font-playfair' })
@@ -31,10 +30,9 @@ export default function RootLayout({
     <html lang="pt-BR">
       <body className={`${_inter.variable} ${_playfair.variable} font-sans antialiased`}>
         {children}
-        <InstallPWAButton />
         <UpdateAvailableToast />
         <NetworkStatusToast />
-        <IosInstallHint />
+        <ClientOverlays />
       </body>
     </html>
   )
