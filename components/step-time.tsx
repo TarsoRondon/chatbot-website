@@ -1,20 +1,49 @@
 "use client"
 
 import { Check, Clock } from "lucide-react"
-import { useMemo } from "react"
-import { generateTimeSlots } from "@/lib/store"
+import { useEffect, useMemo, useState } from "react"
 
 interface StepTimeProps {
   selectedDate: string | null
   selected: string | null
   onSelect: (time: string) => void
+  barberId?: string | null
 }
 
-export function StepTime({ selectedDate, selected, onSelect }: StepTimeProps) {
-  const slots = useMemo(() => {
-    if (!selectedDate) return []
-    return generateTimeSlots(new Date(selectedDate + "T12:00:00"))
-  }, [selectedDate])
+interface Slot {
+  time: string
+  available: boolean
+}
+
+export function StepTime({ selectedDate, selected, onSelect, barberId }: StepTimeProps) {
+  const [slots, setSlots] = useState<Slot[]>([])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!selectedDate) {
+      setSlots([])
+      return
+    }
+    let mounted = true
+    const load = async () => {
+      try {
+        setLoading(true)
+        const params = new URLSearchParams({ date: selectedDate })
+        if (barberId) params.set("barberId", barberId)
+        const res = await fetch(`/api/public/availability?${params.toString()}`)
+        const json = res.ok ? await res.json() : { slots: [] }
+        if (mounted) setSlots(Array.isArray(json.slots) ? json.slots : [])
+      } catch {
+        if (mounted) setSlots([])
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+    load()
+    return () => {
+      mounted = false
+    }
+  }, [selectedDate, barberId])
 
   const morningSlots = slots.filter((s) => {
     const hour = Number.parseInt(s.time.split(":")[0])
@@ -71,10 +100,20 @@ export function StepTime({ selectedDate, selected, onSelect }: StepTimeProps) {
         <h2 className="font-serif text-2xl font-bold text-foreground">Escolha o horario</h2>
         <p className="mt-1 text-sm text-muted-foreground">Selecione o melhor horario para voce</p>
       </div>
+      {loading && (
+        <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
+          Carregando horarios disponiveis...
+        </div>
+      )}
       <div className="flex flex-col gap-5">
         {morningSlots.length > 0 && renderSlotGroup("Manha", morningSlots)}
         {afternoonSlots.length > 0 && renderSlotGroup("Tarde", afternoonSlots)}
         {eveningSlots.length > 0 && renderSlotGroup("Noite", eveningSlots)}
+        {!loading && slots.length === 0 && (
+          <div className="rounded-xl border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
+            Nenhum horario disponivel para este dia.
+          </div>
+        )}
       </div>
     </div>
   )

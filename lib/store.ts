@@ -1,69 +1,21 @@
 "use client"
 
-export interface Service {
-  id: string
-  name: string
-  duration: string
-  price: number
-}
+import {
+  DEFAULT_ABOUT,
+  DEFAULT_BARBERS,
+  DEFAULT_BUSINESS,
+  DEFAULT_SCHEDULE,
+  DEFAULT_SERVICES,
+  type AboutTag,
+  type Barber,
+  type BusinessInfo,
+  type Appointment,
+  type Service,
+  type ScheduleSettings,
+} from "@/lib/data"
+import { normalizePathOrUrl } from "@/lib/normalize"
 
-export interface Barber {
-  id: string
-  name: string
-  role: string
-  avatar: string
-  photoUrl: string
-}
-
-export interface Appointment {
-  id: string
-  clientName: string
-  clientPhone: string
-  serviceId: string
-  barberId: string
-  barberName: string
-  date: string
-  time: string
-  createdAt: string
-}
-
-export interface BusinessInfo {
-  name: string
-  address: string
-  phone: string
-  instagram: string
-  description: string
-  logoUrl: string
-  hours: string
-}
-
-export const DEFAULT_SERVICES: Service[] = [
-  { id: "corte", name: "Corte", duration: "1hr", price: 60 },
-  { id: "barba", name: "Barba", duration: "1hr", price: 60 },
-  { id: "corte-barba", name: "Corte + Barba", duration: "1hr", price: 100 },
-  { id: "selagem", name: "Selagem", duration: "1hr", price: 100 },
-  { id: "relaxamento", name: "Relaxamento Capilar", duration: "1hr 30min", price: 150 },
-  { id: "sobrancelha", name: "Sobrancelha", duration: "30min", price: 20 },
-  { id: "corte-barba-selagem", name: "Corte + Barba + Selagem", duration: "1hr", price: 200 },
-  { id: "corte-selagem", name: "Corte + Selagem", duration: "1hr", price: 150 },
-  { id: "penteado", name: "Penteado", duration: "40min", price: 40 },
-]
-
-export const DEFAULT_BARBERS: Barber[] = [
-  { id: "angelo", name: "Angelo Henrique", role: "Barbeiro", avatar: "AH", photoUrl: "" },
-  { id: "marcos", name: "Marcos Silva", role: "Barbeiro", avatar: "MS", photoUrl: "" },
-  { id: "joao", name: "Joao Pedro", role: "Barbeiro", avatar: "JP", photoUrl: "" },
-]
-
-export const DEFAULT_BUSINESS: BusinessInfo = {
-  name: "Boto Velho Barbearia",
-  address: "Avenida Alvaro Maia, 2947, Porto Velho",
-  phone: "(69) 99999-9999",
-  instagram: "@botovelhobarbearia",
-  description: "Venha e nos faca uma visita e descubra um novo conceito, um novo corte de cabelo, uma nova barba.",
-  logoUrl: "/logo.png",
-  hours: "Seg - Sab, 09:00 - 19:00",
-}
+export type { AboutTag, Barber, BusinessInfo, Appointment, Service, ScheduleSettings } from "@/lib/data"
 
 // --- Local storage helpers ---
 
@@ -73,6 +25,8 @@ const STORAGE_KEYS = {
   business: "bv_business",
   appointments: "bv_appointments",
   client: "bv_client",
+  about: "bv_about",
+  schedule: "bv_schedule",
 } as const
 
 function getItem<T>(key: string, fallback: T): T {
@@ -90,42 +44,193 @@ function setItem<T>(key: string, value: T): void {
   localStorage.setItem(key, JSON.stringify(value))
 }
 
+async function fetchJson<T>(url: string, fallback: T): Promise<T> {
+  try {
+    const res = await fetch(url, { cache: "no-store" })
+    if (!res.ok) throw new Error("fetch failed")
+    return (await res.json()) as T
+  } catch {
+    return fallback
+  }
+}
+
+async function fetchJsonAuth<T>(url: string, fallback: T): Promise<T> {
+  try {
+    const res = await fetch(url, { cache: "no-store", credentials: "include" })
+    if (!res.ok) throw new Error("fetch failed")
+    return (await res.json()) as T
+  } catch {
+    return fallback
+  }
+}
+
+async function saveJson<T>(url: string, payload: T): Promise<boolean> {
+  try {
+    const res = await fetch(url, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      credentials: "include",
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
 // Services
 export function getServices(): Service[] {
   return getItem(STORAGE_KEYS.services, DEFAULT_SERVICES)
 }
-export function saveServices(services: Service[]) {
+export async function fetchServices(): Promise<Service[]> {
+  const data = await fetchJson<Service[]>("/api/public/services", getServices())
+  setItem(STORAGE_KEYS.services, data)
+  return data
+}
+export async function saveServices(services: Service[]) {
   setItem(STORAGE_KEYS.services, services)
+  return saveJson("/api/admin/services", services)
 }
 
 // Barbers
 export function getBarbers(): Barber[] {
   return getItem(STORAGE_KEYS.barbers, DEFAULT_BARBERS)
 }
-export function saveBarbers(barbers: Barber[]) {
+export async function fetchBarbers(): Promise<Barber[]> {
+  const data = await fetchJson<Barber[]>("/api/public/barbers", getBarbers())
+  setItem(STORAGE_KEYS.barbers, data)
+  return data
+}
+export async function saveBarbers(barbers: Barber[]) {
   setItem(STORAGE_KEYS.barbers, barbers)
+  return saveJson("/api/admin/barbers", barbers)
 }
 
 // Business
 export function getBusiness(): BusinessInfo {
-  return getItem(STORAGE_KEYS.business, DEFAULT_BUSINESS)
+  const stored = getItem(STORAGE_KEYS.business, DEFAULT_BUSINESS)
+  const normalized = { ...stored, logoUrl: normalizePathOrUrl(stored.logoUrl, DEFAULT_BUSINESS.logoUrl) }
+  if (normalized.logoUrl !== stored.logoUrl) {
+    setItem(STORAGE_KEYS.business, normalized)
+  }
+  return normalized
 }
-export function saveBusiness(business: BusinessInfo) {
-  setItem(STORAGE_KEYS.business, business)
+export async function fetchBusiness(): Promise<BusinessInfo> {
+  const data = await fetchJson<BusinessInfo>("/api/public/business", getBusiness())
+  setItem(STORAGE_KEYS.business, data)
+  return data
+}
+export async function saveBusiness(business: BusinessInfo) {
+  setItem(STORAGE_KEYS.business, {
+    ...business,
+    logoUrl: normalizePathOrUrl(business.logoUrl, DEFAULT_BUSINESS.logoUrl),
+  })
+  return saveJson("/api/admin/business", {
+    ...business,
+    logoUrl: normalizePathOrUrl(business.logoUrl, DEFAULT_BUSINESS.logoUrl),
+  })
+}
+
+// About
+export function getAboutTags(): AboutTag[] {
+  const list = getItem(STORAGE_KEYS.about, DEFAULT_ABOUT)
+  const normalized = list.map((item) => ({
+    ...item,
+    photoUrl: normalizePathOrUrl(item.photoUrl, ""),
+  }))
+  if (JSON.stringify(list) !== JSON.stringify(normalized)) {
+    setItem(STORAGE_KEYS.about, normalized)
+  }
+  return normalized
+}
+export async function fetchAboutTags(): Promise<AboutTag[]> {
+  const data = await fetchJson<AboutTag[]>("/api/public/about", getAboutTags())
+  setItem(STORAGE_KEYS.about, data)
+  return data
+}
+export async function saveAboutTags(tags: AboutTag[]) {
+  setItem(
+    STORAGE_KEYS.about,
+    tags.map((item) => ({
+      ...item,
+      photoUrl: normalizePathOrUrl(item.photoUrl, ""),
+    })),
+  )
+  return saveJson(
+    "/api/admin/about",
+    tags.map((item) => ({
+      ...item,
+      photoUrl: normalizePathOrUrl(item.photoUrl, ""),
+    })),
+  )
+}
+
+// Schedule
+export function getSchedule(): ScheduleSettings {
+  return getItem(STORAGE_KEYS.schedule, DEFAULT_SCHEDULE)
+}
+export async function fetchSchedule(): Promise<ScheduleSettings> {
+  const data = await fetchJson<ScheduleSettings>("/api/public/schedule", getSchedule())
+  setItem(STORAGE_KEYS.schedule, data)
+  return data
+}
+export async function fetchScheduleAdmin(): Promise<ScheduleSettings> {
+  const data = await fetchJsonAuth<ScheduleSettings>("/api/admin/schedule", getSchedule())
+  setItem(STORAGE_KEYS.schedule, data)
+  return data
+}
+export async function saveSchedule(schedule: ScheduleSettings) {
+  setItem(STORAGE_KEYS.schedule, schedule)
+  return saveJson("/api/admin/schedule", schedule)
 }
 
 // Appointments
 export function getAppointments(): Appointment[] {
   return getItem(STORAGE_KEYS.appointments, [])
 }
-export function saveAppointment(appointment: Appointment) {
-  const list = getAppointments()
-  list.push(appointment)
-  setItem(STORAGE_KEYS.appointments, list)
+export async function saveAppointment(appointment: Appointment): Promise<{ ok: boolean; reason?: string }> {
+  try {
+    const res = await fetch("/api/public/appointments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(appointment),
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      return { ok: false, reason: String(json?.reason || "erro") }
+    }
+    const list = getAppointments()
+    list.push(appointment)
+    setItem(STORAGE_KEYS.appointments, list)
+    return { ok: true }
+  } catch {
+    return { ok: false, reason: "erro" }
+  }
 }
 export function cancelAppointment(id: string) {
   const list = getAppointments().filter((a) => a.id !== id)
   setItem(STORAGE_KEYS.appointments, list)
+  void fetch("/api/public/appointments", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id }),
+  })
+}
+
+export async function fetchAppointmentsAdmin(): Promise<Appointment[]> {
+  return fetchJsonAuth<Appointment[]>("/api/admin/appointments", getAppointments())
+}
+
+export async function fetchAppointmentsForClient(client: ClientSession): Promise<Appointment[]> {
+  const params = new URLSearchParams()
+  if (client?.phone) params.set("phone", client.phone)
+  if (client?.name) params.set("name", client.name)
+  const data = await fetchJson<Appointment[]>(
+    `/api/public/appointments?${params.toString()}`,
+    getAppointments(),
+  )
+  setItem(STORAGE_KEYS.appointments, data)
+  return data
 }
 
 // Client session

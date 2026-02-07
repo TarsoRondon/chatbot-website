@@ -3,19 +3,39 @@
 import { useEffect, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Clock, MapPin, Scissors, Users, Star, ChevronRight } from "lucide-react"
+import { Clock, MapPin, Scissors, Users, Star, ChevronRight, Sparkles } from "lucide-react"
 import { Navbar } from "@/components/navbar"
-import { getServices, getBarbers, getBusiness, type Service, type Barber, type BusinessInfo } from "@/lib/store"
+import {
+  fetchServices,
+  fetchBarbers,
+  fetchBusiness,
+  fetchAboutTags,
+  type Service,
+  type Barber,
+  type BusinessInfo,
+  type AboutTag,
+} from "@/lib/store"
 
 export default function HomePage() {
   const [services, setServices] = useState<Service[]>([])
   const [barbers, setBarbers] = useState<Barber[]>([])
   const [business, setBusiness] = useState<BusinessInfo | null>(null)
+  const [aboutTags, setAboutTags] = useState<AboutTag[]>([])
 
   useEffect(() => {
-    setServices(getServices())
-    setBarbers(getBarbers())
-    setBusiness(getBusiness())
+    let mounted = true
+    Promise.all([fetchServices(), fetchBarbers(), fetchBusiness(), fetchAboutTags()]).then(
+      ([servicesData, barbersData, businessData, aboutData]) => {
+        if (!mounted) return
+        setServices(servicesData)
+        setBarbers(barbersData)
+        setBusiness(businessData)
+        setAboutTags(aboutData)
+      },
+    )
+    return () => {
+      mounted = false
+    }
   }, [])
 
   return (
@@ -39,7 +59,7 @@ export default function HomePage() {
         {/* Logo overlay */}
         <div className="absolute left-6 top-20 md:left-10 md:top-24">
           <Image
-            src="/logo.png"
+            src={business?.logoUrl ?? "/logo.png"}
             alt={business?.name ?? "Boto Velho"}
             width={100}
             height={100}
@@ -136,6 +156,79 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* About Us */}
+      {aboutTags.length > 0 && (
+        <section className="relative overflow-hidden border-t border-border px-6 py-16 md:px-10">
+          <div className="absolute -right-24 top-6 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
+          <div className="absolute -left-24 bottom-6 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
+
+          <div className="relative mx-auto max-w-5xl">
+            <div className="flex items-start justify-between gap-6">
+              <div>
+                <div className="flex items-center gap-2 text-primary">
+                  <Sparkles className="h-4 w-4" />
+                  <p className="text-xs font-semibold uppercase tracking-widest">Sobre nos</p>
+                </div>
+                <h2 className="mt-2 font-serif text-3xl font-bold text-foreground md:text-4xl">
+                  Detalhes que fazem a diferenca
+                </h2>
+                <p className="mt-3 max-w-xl text-sm text-muted-foreground md:text-base">
+                  Um pouco da nossa historia, do nosso estilo e da experiencia que voce encontra aqui.
+                </p>
+              </div>
+              <Link
+                href="/agendar"
+                className="hidden items-center gap-2 rounded-full border border-primary/40 px-5 py-2 text-xs font-semibold text-foreground transition-colors hover:border-primary hover:bg-primary/10 md:flex"
+              >
+                Agendar agora
+              </Link>
+            </div>
+
+            <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {aboutTags.map((item) => (
+                <div
+                  key={item.id}
+                  className="group relative overflow-hidden rounded-2xl border border-border bg-card p-5 transition-all hover:-translate-y-1 hover:border-primary/40 hover:shadow-[0_18px_40px_rgba(0,0,0,0.35)]"
+                >
+                  <div className="relative h-40 overflow-hidden rounded-xl border border-border bg-secondary/60">
+                    {item.photoUrl ? (
+                      <Image
+                        src={item.photoUrl}
+                        alt={item.title || item.tag}
+                        fill
+                        className="object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+                        Sem foto
+                      </div>
+                    )}
+                    <div className="absolute left-3 top-3 rounded-full bg-background/80 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-foreground">
+                      {item.tag || "Tema"}
+                    </div>
+                  </div>
+                  <h3 className="mt-4 text-lg font-semibold text-foreground">
+                    {item.title || "Novo tema"}
+                  </h3>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {item.description || "Adicione uma descricao no painel admin."}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-8 flex md:hidden">
+              <Link
+                href="/agendar"
+                className="w-full rounded-full border border-primary/40 px-5 py-3 text-center text-xs font-semibold text-foreground transition-colors hover:border-primary hover:bg-primary/10"
+              >
+                Agendar agora
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Team Preview */}
       {barbers.length > 0 && (
         <section className="border-t border-border px-6 py-16 md:px-10">
@@ -200,7 +293,13 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="border-t border-border px-6 py-8 md:px-10">
         <div className="mx-auto flex max-w-5xl flex-col items-center gap-4 text-center">
-          <Image src="/logo.png" alt="Boto Velho" width={48} height={48} className="rounded-lg" />
+          <Image
+            src={business?.logoUrl ?? "/logo.png"}
+            alt={business?.name ?? "Boto Velho"}
+            width={48}
+            height={48}
+            className="rounded-lg"
+          />
           <p className="text-sm text-muted-foreground">{business?.address}</p>
           <p className="text-xs text-muted-foreground">
             {"2026 "}{business?.name ?? "Boto Velho Barbearia"}. Todos os direitos reservados.

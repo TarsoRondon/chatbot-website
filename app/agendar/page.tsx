@@ -10,9 +10,9 @@ import { StepBarber } from "@/components/step-barber"
 import { StepDate } from "@/components/step-date"
 import { StepTime } from "@/components/step-time"
 import {
-  getServices,
-  getBarbers,
-  getBusiness,
+  fetchServices,
+  fetchBarbers,
+  fetchBusiness,
   getClient,
   saveClient,
   saveAppointment,
@@ -47,6 +47,7 @@ export default function AgendarPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [selectedTime, setSelectedTime] = useState<string | null>(null)
   const [isBooked, setIsBooked] = useState(false)
+  const [bookingError, setBookingError] = useState<string | null>(null)
 
   const hasBarbers = barbers.length > 0
 
@@ -59,14 +60,23 @@ export default function AgendarPage() {
   const totalSteps = hasBarbers ? 5 : 4
 
   useEffect(() => {
-    setServices(getServices())
-    setBarbers(getBarbers())
-    setBusiness(getBusiness())
-    const existing = getClient()
-    if (existing) {
-      setClient(existing)
+    let mounted = true
+    Promise.all([fetchServices(), fetchBarbers(), fetchBusiness()]).then(
+      ([servicesData, barbersData, businessData]) => {
+        if (!mounted) return
+        setServices(servicesData)
+        setBarbers(barbersData)
+        setBusiness(businessData)
+        const existing = getClient()
+        if (existing) {
+          setClient(existing)
+        }
+        setIsLoaded(true)
+      },
+    )
+    return () => {
+      mounted = false
     }
-    setIsLoaded(true)
   }, [])
 
   const service = services.find((s) => s.id === selectedService) ?? null
@@ -107,7 +117,7 @@ export default function AgendarPage() {
     }
   }
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (step === totalSteps) {
       // Confirm booking
       const appointment = {
@@ -121,7 +131,21 @@ export default function AgendarPage() {
         time: selectedTime!,
         createdAt: new Date().toISOString(),
       }
-      saveAppointment(appointment)
+      const result = await saveAppointment(appointment)
+      if (!result.ok) {
+        const reason = result.reason || "erro"
+        const message =
+          reason === "barbeiro_ocupado"
+            ? "Esse barbeiro ja esta ocupado nesse horario. Escolha outro."
+            : reason === "sem_vagas"
+              ? "Horario indisponivel. Escolha outro horario."
+              : reason === "dia_fechado"
+                ? "A barbearia esta fechada nesse dia."
+                : "Nao foi possivel concluir. Tente outro horario."
+        setBookingError(message)
+        return
+      }
+      setBookingError(null)
       setIsBooked(true)
       return
     }
@@ -135,6 +159,12 @@ export default function AgendarPage() {
   const handleDateSelect = (dateStr: string) => {
     setSelectedDate(dateStr)
     setSelectedTime(null)
+    setBookingError(null)
+  }
+
+  const handleTimeSelect = (time: string) => {
+    setSelectedTime(time)
+    setBookingError(null)
   }
 
   const handleNewBooking = () => {
@@ -157,7 +187,7 @@ export default function AgendarPage() {
           <div className="w-full max-w-sm">
             <div className="flex flex-col items-center gap-4 text-center">
               <Image
-                src="/logo.png"
+                src={business?.logoUrl ?? "/logo.png"}
                 alt="Boto Velho Barbearia"
                 width={80}
                 height={80}
@@ -411,6 +441,12 @@ export default function AgendarPage() {
           </div>
         )}
 
+        {bookingError && (
+          <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+            {bookingError}
+          </div>
+        )}
+
         <div className="rounded-xl bg-muted p-4">
           <p className="text-center text-xs text-muted-foreground">
             Este estabelecimento permite cancelamentos com no minimo <span className="font-bold text-foreground">1 h</span> de antecedencia.
@@ -436,7 +472,13 @@ export default function AgendarPage() {
               <p className="text-[10px] text-muted-foreground">{client.phone}</p>
             </div>
           </div>
-          <Image src="/logo.png" alt="Logo" width={32} height={32} className="rounded-lg" />
+          <Image
+            src={business?.logoUrl ?? "/logo.png"}
+            alt={business?.name ?? "Logo"}
+            width={32}
+            height={32}
+            className="rounded-lg"
+          />
         </div>
       </div>
 
@@ -481,7 +523,12 @@ export default function AgendarPage() {
             <StepDate selected={selectedDate} onSelect={handleDateSelect} />
           )}
           {contentStep === 4 && (
-            <StepTime selectedDate={selectedDate} selected={selectedTime} onSelect={setSelectedTime} />
+            <StepTime
+              selectedDate={selectedDate}
+              selected={selectedTime}
+              onSelect={handleTimeSelect}
+              barberId={selectedBarber}
+            />
           )}
           {contentStep === 5 && <ConfirmStep />}
         </div>

@@ -8,5 +8,11 @@ instrumentation-client.ts
 # Common ignores
 node_modules/
 .next/
+data/
+public/uploads/
+public/sw.js
+public/workbox-*.js
+public/fallback-*.js
+public/worker-*.js
 .env*.local
 .DS_Store

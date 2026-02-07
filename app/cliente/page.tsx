@@ -20,12 +20,15 @@ import {
   logoutClient,
   getAppointments,
   cancelAppointment,
-  getServices,
-  getBarbers,
+  fetchServices,
+  fetchBarbers,
+  fetchBusiness,
+  fetchAppointmentsForClient,
   type ClientSession,
   type Appointment,
   type Service,
   type Barber,
+  type BusinessInfo,
 } from "@/lib/store"
 
 export default function ClientePage() {
@@ -33,16 +36,27 @@ export default function ClientePage() {
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [services, setServices] = useState<Service[]>([])
   const [barbers, setBarbers] = useState<Barber[]>([])
+  const [business, setBusiness] = useState<BusinessInfo | null>(null)
   const [loginName, setLoginName] = useState("")
   const [loginPhone, setLoginPhone] = useState("")
   const [isLoaded, setIsLoaded] = useState(false)
 
   useEffect(() => {
-    setClient(getClient())
-    setAppointments(getAppointments())
-    setServices(getServices())
-    setBarbers(getBarbers())
-    setIsLoaded(true)
+    let mounted = true
+    Promise.all([fetchServices(), fetchBarbers(), fetchBusiness()]).then(
+      ([servicesData, barbersData, businessData]) => {
+        if (!mounted) return
+        setClient(getClient())
+        setAppointments(getAppointments())
+        setServices(servicesData)
+        setBarbers(barbersData)
+        setBusiness(businessData)
+        setIsLoaded(true)
+      },
+    )
+    return () => {
+      mounted = false
+    }
   }, [])
 
   const handleLogin = () => {
@@ -63,10 +77,25 @@ export default function ClientePage() {
   const handleCancel = useCallback(
     (id: string) => {
       cancelAppointment(id)
-      setAppointments(getAppointments())
+      if (client) {
+        fetchAppointmentsForClient(client).then((data) => setAppointments(data))
+      } else {
+        setAppointments(getAppointments())
+      }
     },
-    []
+    [client]
   )
+
+  useEffect(() => {
+    if (!client) return
+    let mounted = true
+    fetchAppointmentsForClient(client).then((data) => {
+      if (mounted) setAppointments(data)
+    })
+    return () => {
+      mounted = false
+    }
+  }, [client])
 
   const formatPhone = (value: string): string => {
     const digits = value.replace(/\D/g, "").slice(0, 11)
@@ -90,8 +119,8 @@ export default function ClientePage() {
           <div className="w-full max-w-sm">
             <div className="flex flex-col items-center gap-4 text-center">
               <Image
-                src="/logo.png"
-                alt="Boto Velho Barbearia"
+                src={business?.logoUrl ?? "/logo.png"}
+                alt={business?.name ?? "Boto Velho Barbearia"}
                 width={64}
                 height={64}
                 className="rounded-xl"
@@ -169,14 +198,23 @@ export default function ClientePage() {
               <p className="text-xs text-muted-foreground">{client.phone}</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            Sair
-          </button>
+          <div className="flex items-center gap-3">
+            <Image
+              src={business?.logoUrl ?? "/logo.png"}
+              alt={business?.name ?? "Logo"}
+              width={36}
+              height={36}
+              className="rounded-lg"
+            />
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Sair
+            </button>
+          </div>
         </div>
 
         {/* My appointments section */}
